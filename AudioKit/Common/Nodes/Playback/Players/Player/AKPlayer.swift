@@ -176,12 +176,18 @@ public class AKPlayer: AKNode {
     internal var _rate: Double {
         return 1.0
     }
+    
+    internal var _isPaused = false
 
     // MARK: - Public Properties
 
     /// Completion handler to be called when Audio is done playing. The handler won't be called if
     /// stop() is called while playing or when looping from a buffer.
     @objc public var completionHandler: AKCallback?
+
+    /// Completion handler to be called when Audio has looped. The handler won't be called if
+    /// stop() is called while playing.
+    @objc public var loopCompletionHandler: AKCallback?
 
     /// Used with buffering players
     @objc public var buffer: AVAudioPCMBuffer?
@@ -219,7 +225,7 @@ public class AKPlayer: AKNode {
         }
 
         set {
-            playerNode.volume = Float(newValue)
+            playerNode.volume = AUValue(newValue)
         }
     }
 
@@ -247,7 +253,7 @@ public class AKPlayer: AKNode {
             return Double(playerNode.pan)
         }
         set {
-            playerNode.pan = Float(newValue)
+            playerNode.pan = AUValue(newValue)
         }
     }
 
@@ -303,12 +309,20 @@ public class AKPlayer: AKNode {
     /// - Returns: Current time of the player in seconds while playing.
     @objc public var currentTime: Double {
         let currentDuration = (endTime - startTime == 0) ? duration : (endTime - startTime)
-        let current = startTime + playerTime.truncatingRemainder(dividingBy: currentDuration)
-
+        var normalisedPauseTime = 0.0
+        if let pauseTime = pauseTime, pauseTime > startTime {
+            normalisedPauseTime = pauseTime - startTime
+        }
+        let current = startTime + normalisedPauseTime + playerTime.truncatingRemainder(dividingBy: currentDuration)
+        
         return current
     }
-
-    public var pauseTime: Double?
+    
+    public var pauseTime: Double? {
+        didSet {
+            _isPaused = pauseTime != nil
+        }
+    }
 
     @objc public var processingFormat: AVAudioFormat? {
         guard let audioFile = audioFile else { return nil }
@@ -323,6 +337,8 @@ public class AKPlayer: AKNode {
         return isNormalized || isReversed || buffering == .always
     }
 
+    @objc public var isNotBuffered: Bool { return !isBuffered }
+
     /// Will automatically normalize on buffer updates if enabled
     @objc public var isNormalized: Bool = false {
         didSet {
@@ -333,7 +349,7 @@ public class AKPlayer: AKNode {
     @objc public var isLooping: Bool = false
 
     @objc public var isPaused: Bool {
-        return pauseTime != nil
+        return _isPaused
     }
 
     /// Reversing the audio will set the player to buffering
@@ -363,7 +379,7 @@ public class AKPlayer: AKNode {
 
     /// Create a player from a URL
     @objc public convenience init?(url: URL) {
-        if !FileManager.default.fileExists(atPath: url.path) {
+        if FileManager.default.fileExists(atPath: url.path) == false {
             return nil
         }
         do {
@@ -497,11 +513,14 @@ public class AKPlayer: AKNode {
             return
         }
         initFader(at: audioTime, hostTime: hostTime)
+        
+        pauseTime = nil
     }
 
     // MARK: - Deinit
 
-    /// Disconnect the node and release resources
+    /// Dispose the audio file, buffer and nodes and release resources.
+    /// Only call when you are totally done with this class.
     @objc public override func detach() {
         stop()
         audioFile = nil

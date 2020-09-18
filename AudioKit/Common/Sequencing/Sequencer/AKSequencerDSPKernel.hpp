@@ -147,25 +147,8 @@ public:
                 }
             }
 
-            // Check scheduled notes for note ons
-            for (int i = 0; i < notes.size(); i++) {
-                int triggerTime = beatToSamples(notes[i].noteOn.beat);
-                if (currentStartSample <= triggerTime && triggerTime < currentEndSample) {
-                    int offset = (int)(triggerTime - currentStartSample);
-                    addPlayingNote(notes[i], offset);
-                } else if (currentEndSample > lengthInSamples() && loopEnabled) {
-                    int loopRestartInBuffer = (int)(lengthInSamples() - currentStartSample);
-                    int samplesOfBufferForNewLoop = frameCount - loopRestartInBuffer;
-                    if (triggerTime < samplesOfBufferForNewLoop) {
-                        int offset = (int)triggerTime + loopRestartInBuffer;
-                        addPlayingNote(notes[i], offset);
-                    }
-                }
-            }
-
             // Check the playing notes for note offs
             int i = 0;
-
             while (i < playingNotes.size()) {
                 int triggerTime = beatToSamples(playingNotes[i].noteOff.beat);
                 if (currentStartSample <= triggerTime && triggerTime < currentEndSample) {
@@ -186,9 +169,43 @@ public:
                 i++;
             }
 
+            // Check scheduled notes for note ons
+            for (int i = 0; i < notes.size(); i++) {
+                int triggerTime = beatToSamples(notes[i].noteOn.beat);
+                if (currentStartSample <= triggerTime && triggerTime < currentEndSample) {
+                    int offset = (int)(triggerTime - currentStartSample);
+                    addPlayingNote(notes[i], offset);
+                } else if (currentEndSample > lengthInSamples() && loopEnabled) {
+                    int loopRestartInBuffer = (int)(lengthInSamples() - currentStartSample);
+                    int samplesOfBufferForNewLoop = frameCount - loopRestartInBuffer;
+                    if (triggerTime < samplesOfBufferForNewLoop) {
+                        int offset = (int)triggerTime + loopRestartInBuffer;
+                        addPlayingNote(notes[i], offset);
+                    }
+                }
+            }
+
             positionInSamples += frameCount;
         }
         framesCounted += frameCount;
+    }
+
+    void removeNoteAt(double beat) {
+        for (int i = 0; i < notes.size(); i++) {
+            MIDINote note = notes[i];
+            if (note.noteOn.beat == beat) {
+                notes.erase(notes.begin()+i);
+            }
+        }
+    }
+
+    void removeEventAt(double beat) {
+        for (int i = 0; i < events.size(); i++) {
+            MIDIEvent event = events[i];
+            if (event.beat == beat) {
+                events.erase(events.begin()+i);
+            }
+        }
     }
 
     void addMIDIEvent(uint8_t status, uint8_t data1, uint8_t data2, double beat) {
@@ -228,6 +245,9 @@ public:
     }
 
     void sendMidiData(UInt8 status, UInt8 data1, UInt8 data2, double offset, double time) {
+        if (!seqEnabled) {
+            return;
+        }
 //        printf("%p: sending: %i %i %i at offset %f (%f beats)\n", &midiEndpoint, status, data1, data2, offset, time);
         if (midiPort == 0 || midiEndpoint == 0) {
             MusicDeviceMIDIEvent(targetAU, status, data1, data2, offset);
@@ -293,6 +313,7 @@ public:
     int maximumPlayCount = 0;
     double length = 4.0;
     double tempo = 120.0;
+    bool seqEnabled = true;
     bool loopEnabled = true;
     uint numberOfLoops = 0;
 };

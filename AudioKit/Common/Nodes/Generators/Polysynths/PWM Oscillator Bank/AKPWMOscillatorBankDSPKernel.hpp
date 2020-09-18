@@ -14,7 +14,7 @@
 class AKPWMOscillatorBankDSPKernel : public AKBankDSPKernel, public AKOutputBuffered {
 protected:
     // MARK: Types
-    
+
     struct NoteState  : public AKBankDSPKernel::NoteState {
 
         sp_blsquare *blsquare;
@@ -22,15 +22,17 @@ protected:
         NoteState() {
             sp_blsquare_create(&blsquare);
         }
-        
+
         virtual ~NoteState() {
             sp_blsquare_destroy(&blsquare);
         }
-        
-        void init() override {
-            sp_adsr_create(&adsr);
-            sp_adsr_init(kernel->getSpData(), adsr);
+
+        void initDSP() {
             sp_blsquare_init(kernel->getSpData(), blsquare);
+        }
+
+        void init() override {
+            sp_adsr_init(kernel->getSpData(), adsr);
             *blsquare->freq = 0;
             *blsquare->amp = 0;
             *blsquare->width = 0.5;
@@ -48,7 +50,7 @@ protected:
         void run(int frameCount, float *outL, float *outR) override
         {
             auto bankKernel = (AKPWMOscillatorBankDSPKernel*)kernel;
-            
+
             float originalFrequency = *blsquare->freq;
             *blsquare->freq *= powf(2, kernel->pitchBend / 12.0);
             *blsquare->freq = clamp(*blsquare->freq, 0.0f, 22050.0f);
@@ -100,6 +102,9 @@ public:
 
     void init(int channelCount, double sampleRate) override {
         AKBankDSPKernel::init(channelCount, sampleRate);
+        for (auto& ns : noteStates) {
+            static_cast<NoteState*>(ns.get())->initDSP();
+        }
         pulseWidthRamper.init();
     }
 

@@ -13,6 +13,7 @@ typedef void (^AKCCallback)(void);
 
 @interface AKSequencerEngine : AKAudioUnit
 @property (nonatomic) float startPoint;
+@property (nonatomic) bool seqEnabled;
 @property (nonatomic) bool loopEnabled;
 @property (nonatomic) double tempo;
 @property (readonly) double currentPosition;
@@ -29,6 +30,8 @@ typedef void (^AKCCallback)(void);
           velocity:(uint8_t)velocity
               beat:(double)beat
           duration:(double)duration;
+-(void)removeEvent:(double)beat;
+-(void)removeNote:(double)beat;
 -(void)clear;
 -(void)rewind;
 -(void)seekTo:(double)seekPosition;

@@ -20,17 +20,27 @@ extension MIDIByte {
     /// it sounds like your are referring to the highest bit and the lowest bit
 
     /// This limits the range to be from 0 to 16
-    var lowBit: MIDIByte {
+    public var lowBit: MIDIByte {
         return self & 0xF
     }
 
-    var highBit: MIDIByte {
+    public var highBit: MIDIByte {
         return self >> 4
     }
 
     public var hex: String {
         let st = String(format: "%02X", self)
         return "0x\(st)"
+    }
+}
+
+extension Array where Element == MIDIByte {
+    var hex: String {
+        return self.map({ $0.hex.replacingOccurrences(of: "0x", with: "") }).joined(separator: "")
+    }
+
+    var integerValue: Int? {
+        return Int(hex, radix: 16)
     }
 }
 
@@ -51,7 +61,7 @@ extension MIDIWord {
     /// Create a MIDIWord for a command and command version
     /// [command byte][version byte]
     ///
-    /// This is used to construct a word that would be sent in Sysex
+    /// This is used to construct a word that would be sent in SysEx
     ///
     /// - Parameters:
     ///   - command: Command Byte Value

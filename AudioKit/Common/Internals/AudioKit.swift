@@ -23,9 +23,9 @@ public typealias AKMIDICallback = (MIDIByte, MIDIByte, MIDIByte) -> Void
 /// Top level AudioKit managing class
 open class AudioKit: NSObject {
     #if !os(macOS)
-    static let deviceSampleRate = AVAudioSession.sharedInstance().sampleRate
+    public static let deviceSampleRate = AVAudioSession.sharedInstance().sampleRate
     #else
-    static let deviceSampleRate: Double = 44_100
+    public static let deviceSampleRate: Double = 44_100
     #endif
 
     // MARK: - Internal audio engine mechanics
@@ -76,25 +76,27 @@ open class AudioKit: NSObject {
     /// An audio output operation that most applications will need to use last
     @objc public static var output: AKNode? {
         didSet {
+            #if !os(macOS)
             do {
                 try updateSessionCategoryAndOptions()
-
-                // if the assigned output is already a mixer, avoid creating an additional mixer and just use
-                // that input as the finalMixer
-                if let mixerInput = output as? AKMixer {
-                    finalMixer = mixerInput
-                } else {
-                    // otherwise at this point create the finalMixer and add the input to it
-                    let mixer = AKMixer()
-                    output?.connect(to: mixer)
-                    finalMixer = mixer
-                }
-                guard let finalMixer = finalMixer else { return }
-                engine.connect(finalMixer.avAudioNode, to: engine.outputNode, format: AKSettings.audioFormat)
-
-            } catch {
-                AKLog("Could not set output: \(error)")
+                } catch {
+                    AKLog("Could not set session category: \(error)")
             }
+            #endif
+
+            // if the assigned output is already a mixer, avoid creating an additional mixer and just use
+            // that input as the finalMixer
+            if let mixerInput = output as? AKMixer {
+                finalMixer = mixerInput
+            } else {
+                // otherwise at this point create the finalMixer and add the input to it
+                let mixer = AKMixer()
+                output?.connect(to: mixer)
+                finalMixer = mixer
+            }
+            guard let finalMixer = finalMixer else { return }
+            engine.connect(finalMixer.avAudioNode, to: engine.outputNode, format: AKSettings.audioFormat)
+
         }
     }
 

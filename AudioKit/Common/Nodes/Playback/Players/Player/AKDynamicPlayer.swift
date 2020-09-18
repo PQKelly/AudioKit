@@ -22,23 +22,24 @@ public class AKDynamicPlayer: AKPlayer {
             }
 
             // timePitch is only installed if it is requested. This saves resources.
-            if timePitchNode != nil && newValue == 1 && pitch == 0 {
+            if timePitchNode != nil, newValue == 1, pitch == 0 {
                 removeTimePitch()
                 return
-            } else if timePitchNode == nil && newValue != 1 {
-                timePitchNode = AKTimePitch()
-                initialize()
+            } else if timePitchNode == nil, newValue != 1 {
+                createTimePitch()
             }
 
-            guard let timePitchNode = timePitchNode else { return }
-            timePitchNode.rate = newValue
-            if timePitchNode.isBypassed && timePitchNode.rate != 1 {
-                timePitchNode.start()
+            if let timePitchNode = self.timePitchNode {
+                timePitchNode.rate = newValue
+                if timePitchNode.isBypassed, timePitchNode.rate != 1 {
+                    timePitchNode.start()
+                }
             }
         }
     }
 
-    internal override var _rate: Double {
+    // override this with the actual rate property above
+    override internal var _rate: Double {
         return rate
     }
 
@@ -52,86 +53,95 @@ public class AKDynamicPlayer: AKPlayer {
             if newValue == pitch {
                 return
             }
-            // timePitch is only installed if it is requested. This saves CPU resources.
-            if timePitchNode != nil && newValue == 0 && rate == 1 {
+            // timePitch is only installed if it is requested. This saves nodes as it's expensive.
+            if timePitchNode != nil, newValue == 0, rate == 1, !isPlaying {
                 removeTimePitch()
                 return
-            } else if timePitchNode == nil && newValue != 0 {
-                timePitchNode = AKTimePitch()
-                initialize()
+            } else if timePitchNode == nil, newValue != 0 {
+                createTimePitch()
             }
 
-            guard let timePitchNode = timePitchNode else { return }
-
-            timePitchNode.pitch = newValue
-            if timePitchNode.isBypassed && timePitchNode.pitch != 0 {
-                timePitchNode.start()
+            if let timePitchNode = self.timePitchNode {
+                timePitchNode.pitch = newValue
+                if timePitchNode.isBypassed, timePitchNode.pitch != 0 {
+                    timePitchNode.start()
+                }
             }
         }
     }
 
     // MARK: - Initialization
 
-    internal override func initialize(restartIfPlaying: Bool = true) {
-        if let timePitchNode = timePitchNode {
+    override open func initialize(restartIfPlaying: Bool = true) {
+        if let timePitchNode = self.timePitchNode {
             if timePitchNode.avAudioNode.engine == nil {
                 AudioKit.engine.attach(timePitchNode.avAudioNode)
             } else {
                 timePitchNode.disconnectOutput()
             }
         }
-
         super.initialize(restartIfPlaying: restartIfPlaying)
     }
 
-    internal override func connectNodes() {
-        guard let processingFormat = processingFormat else { return }
+    override internal func connectNodes() {
+        guard let processingFormat = processingFormat else {
+            AKLog("Error: the audioFile processingFormat is nil, so nothing can be connected.")
+            return
+        }
 
-        if let timePitchNode = timePitchNode, let faderNode = faderNode {
-            AudioKit.connect(playerNode, to: timePitchNode.avAudioNode, format: processingFormat)
-            AudioKit.connect(timePitchNode.avAudioNode, to: faderNode.avAudioUnitOrNode, format: processingFormat)
-            AudioKit.connect(faderNode.avAudioUnitOrNode, to: mixer, format: processingFormat)
-            timePitchNode.bypass() // bypass timePitch by default to save CPU
-            // AKLog(audioFile?.url.lastPathComponent ?? "URL is nil", processingFormat, "Connecting timePitch and fader")
+        var connectionFormat = processingFormat
+        var playerOutput: AVAudioNode = playerNode
 
-        } else if let timePitchNode = timePitchNode, faderNode == nil {
-            AudioKit.connect(playerNode, to: timePitchNode.avAudioNode, format: processingFormat)
-            AudioKit.connect(timePitchNode.avAudioNode, to: mixer, format: processingFormat)
+        // if there is a mixer that was creating, insert it in line
+        // this is used only for dynamic sample rate conversion to
+        // AKSettings.audioFormat if needed
+        if let mixerNode = mixerNode {
+            AudioKit.connect(playerNode, to: mixerNode, format: processingFormat)
+            connectionFormat = AKSettings.audioFormat
+            playerOutput = mixerNode
+        }
+
+        if let faderNode = faderNode, let timePitchNode = timePitchNode {
+            AKLog("👉 Player → Time Pitch → Fader using", connectionFormat)
+            AudioKit.connect(playerOutput, to: timePitchNode.avAudioNode, format: connectionFormat)
+            AudioKit.connect(timePitchNode.avAudioUnitOrNode, to: faderNode.avAudioUnitOrNode, format: connectionFormat)
             timePitchNode.bypass()
-            // AKLog(audioFile?.url.lastPathComponent ?? "URL is nil", processingFormat, "Connecting timePitch")
 
-        } else if let faderNode = faderNode {
-            // if the timePitchNode isn't created connect the player directly to the faderNode
-            AudioKit.connect(playerNode, to: faderNode.avAudioUnitOrNode, format: processingFormat)
-            AudioKit.connect(faderNode.avAudioUnitOrNode, to: mixer, format: processingFormat)
-            // AKLog(audioFile?.url.lastPathComponent ?? "URL is nil", processingFormat, "Connecting fader")
-
-        } else {
-            AudioKit.connect(playerNode, to: mixer, format: processingFormat)
-            // AKLog(audioFile?.url.lastPathComponent ?? "URL is nil", processingFormat, "Connecting player to mixer")
+        } else if let faderNode = super.faderNode {
+            AKLog("👉 Player → Fader using", connectionFormat)
+            AudioKit.connect(playerOutput, to: faderNode.avAudioUnitOrNode, format: connectionFormat)
         }
     }
 
-    private func removeTimePitch() {
-        guard let timePitchNode = timePitchNode else { return }
+    public func createTimePitch() {
+        guard timePitchNode == nil else { return }
+
+        AKLog("👉 Creating AKTimePitch")
+        timePitchNode = AKTimePitch()
+        initialize()
+    }
+
+    // Removes the Time / Pitch AU from the signal chain
+    public func removeTimePitch() {
+        guard timePitchNode != nil else { return }
         let wasPlaying = isPlaying
         stop()
-        timePitchNode.disconnectOutput()
-        AudioKit.detach(nodes: [timePitchNode.avAudioNode])
-        self.timePitchNode = nil
+        timePitchNode?.disconnectOutput()
+        timePitchNode?.detach()
+        timePitchNode = nil
         initialize()
         if wasPlaying {
             play()
         }
     }
 
-    public override func play(from startingTime: Double, to endingTime: Double, at audioTime: AVAudioTime?, hostTime: UInt64?) {
+    override public func play(from startingTime: Double, to endingTime: Double, at audioTime: AVAudioTime?, hostTime: UInt64?) {
         timePitchNode?.start()
         super.play(from: startingTime, to: endingTime, at: audioTime, hostTime: hostTime)
     }
 
     /// Stop playback and cancel any pending scheduled playback or completion events
-    public override func stop() {
+    override public func stop() {
         super.stop()
 
         // the time strecher draws a fair bit of CPU when it isn't bypassed, so auto bypass it
@@ -140,10 +150,8 @@ public class AKDynamicPlayer: AKPlayer {
 
     /// Dispose the audio file, buffer and nodes and release resources.
     /// Only call when you are totally done with this class.
-    public override func detach() {
+    override public func detach() {
         super.detach()
-        if let timePitchNode = timePitchNode {
-            AudioKit.detach(nodes: [timePitchNode.avAudioNode])
-        }
+        timePitchNode?.detach()
     }
 }

@@ -44,6 +44,11 @@ open class AKSequencerTrack: AKNode, AKComponent {
         set { internalAU?.maximumPlayCount = newValue }
     }
 
+    public var seqEnabled: Bool {
+        set { internalAU?.seqEnabled = newValue }
+        get { return internalAU?.seqEnabled ?? false }
+    }
+
     /// Is looping enabled?
     public var loopEnabled: Bool {
         set { internalAU?.loopEnabled = newValue }
@@ -151,6 +156,14 @@ open class AKSequencerTrack: AKNode, AKComponent {
         if let status = event.status, event.data.count > 2 {
             add(status: status, data1: event.data[1], data2: event.data[2], position: position)
         }
+    }
+
+    open func removeEvent(at position: Double) {
+        internalAU?.removeEvent(position)
+    }
+
+    open func removeNote(at position: Double) {
+        internalAU?.removeNote(position)
     }
 
     /// Remove the notes in the track

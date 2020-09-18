@@ -10,16 +10,6 @@ import CoreMIDI
 
 /// MIDI input and output handler
 ///
-/// You add MIDI listeners like this:
-/// ```
-/// var midi = AudioKit.midi
-/// midi.openInput()
-/// midi.addListener(someClass)
-/// ```
-/// ...where someClass conforms to the AKMIDIListener protocol
-///
-/// You then implement the methods you need from AKMIDIListener and use the data how you need.
-///
 open class AKMIDI {
 
     // MARK: - Properties
@@ -31,7 +21,7 @@ open class AKMIDI {
     internal let clientName: CFString = "MIDI Client" as CFString
 
     /// Array of MIDI In ports
-    internal var inputPorts = [MIDIUniqueID: MIDIPortRef]()
+    public var inputPorts = [MIDIUniqueID: MIDIPortRef]()
 
     /// Virtual MIDI Input destination
     open var virtualInput = MIDIPortRef()
@@ -46,21 +36,21 @@ open class AKMIDI {
     open var virtualOutput = MIDIPortRef()
 
     /// MIDI Out Port Name
-    internal var outputPortName: CFString = "MIDI Out Port" as CFString
+    var outputPortName: CFString = "MIDI Out Port" as CFString
 
     /// Array of MIDI Endpoints
     open var endpoints = [MIDIUniqueID: MIDIEndpointRef]()
 
     /// Array of all listeners
-    internal var listeners = [AKMIDIListener]()
+    public var listeners = [AKMIDIListener]()
 
-    internal var transformers = [AKMIDITransformer]()
+    public var transformers = [AKMIDITransformer]()
 
     // MARK: - Initialization
 
     /// Initialize the AKMIDI system
     @objc public init() {
-        AKLog("Initializing MIDI")
+        AKLog("Initializing MIDI", log: OSLog.midi)
 
         #if os(iOS)
         MIDINetworkSession.default().isEnabled = true
@@ -90,22 +80,22 @@ open class AKMIDI {
                 }
             }
             if result != noErr {
-                AKLog("Error creating MIDI client : \(result)")
+                AKLog("Error creating MIDI client: \(result)", log: OSLog.midi, type: .error)
             }
         }
     }
 
     // MARK: - SYSEX
 
-    internal var isReceivingSysex: Bool = false
-    func startReceivingSysex(with midiBytes: [MIDIByte]) {
-        AKLog("Starting to receive Sysex")
-        isReceivingSysex = true
-        incomingSysex = midiBytes
+    internal var isReceivingSysEx: Bool = false
+    func startReceivingSysEx(with midiBytes: [MIDIByte]) {
+        AKLog("Starting to receive SysEx", log: OSLog.midi)
+        isReceivingSysEx = true
+        incomingSysEx = midiBytes
     }
-    func stopReceivingSysex() {
-        AKLog("Done receiving Sysex")
-        isReceivingSysex = false
+    func stopReceivingSysEx() {
+        AKLog("Done receiving SysEx", log: OSLog.midi)
+        isReceivingSysEx = false
     }
-    var incomingSysex = [MIDIByte]()
+    var incomingSysEx = [MIDIByte]()
 }
